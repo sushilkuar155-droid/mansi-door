@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mansi - Voice Door Surprise ❤️</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:linear-gradient(135deg,#24152d,#59334f,#24152d);display:flex;align-items:center;justify-content:center;color:#fff;font-family:Georgia,serif;overflow:hidden}
+.container{text-align:center;width:100%;padding:18px}
+h2{color:#ffd6e7;letter-spacing:1px;margin-bottom:22px;font-size:22px}
+.door-frame{width:230px;height:355px;margin:auto;background:#170c12;border:10px solid #a87955;border-radius:8px 8px 0 0;perspective:1000px;position:relative}
+.inside{position:absolute;inset:0;background:linear-gradient(135deg,#ffb6d2,#e66da0);display:flex;align-items:center;justify-content:center;font-size:58px}
+.door{position:absolute;inset:0;background:linear-gradient(90deg,#713c2b,#a35b3c,#713c2b);border:3px solid #d39a69;transform-origin:left center;transform:rotateY(0deg);transition:transform 2s ease-in-out;transform-style:preserve-3d;backface-visibility:hidden;z-index:2}
+.door:before,.door:after{content:"";position:absolute;left:18px;width:150px;height:110px;border:3px solid #d39a69}
+.door:before{top:22px}.door:after{top:153px}
+.handle{position:absolute;right:17px;top:170px;width:15px;height:15px;background:gold;border-radius:50%}
+.door.open{transform:rotateY(-115deg)}
+.message{margin:22px auto 10px;min-height:54px;max-width:360px;color:#ffe0ed;font-size:18px;line-height:1.45}
+.status{font:14px Arial,sans-serif;color:#f8cfe0;min-height:22px;margin-bottom:8px}
+button{padding:12px 20px;margin:6px;border:0;border-radius:30px;background:#ff8db8;color:#46152d;font-size:15px;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.55}
+.small{font:12px Arial,sans-serif;color:#e9c9da;margin:10px auto;max-width:330px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>🚪 Someone is at the door...</h2>
+<div class="door-frame">
+  <div class="inside">❤️</div>
+  <div class="door" id="door"><div class="handle"></div></div>
+</div>
+<div class="message" id="message">Tap Knock Knock, then speak when the door asks you.</div>
+<div class="status" id="status">Ready ✨</div>
+<div id="controls">
+  <button id="knockBtn" onclick="knock()">🚪 Knock Knock</button>
+</div>
+<div class="small" id="help">Allow microphone access when your browser asks. Speak clearly in a quiet place.</div>
+</div>
+<script>
+const messageEl=document.getElementById('message');
+const statusEl=document.getElementById('status');
+const controls=document.getElementById('controls');
+const helpEl=document.getElementById('help');
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+let step=0, recognition=null, listening=false, opened=false;
+
+function say(text, after){
+  if(!('speechSynthesis' in window)){ if(after) after(); return; }
+  window.speechSynthesis.cancel();
+  const utterance=new SpeechSynthesisUtterance(text);
+  utterance.lang='en-IN';
+  utterance.rate=0.9;
+  utterance.pitch=1.05;
+  utterance.onend=()=>{ if(after) after(); };
+  utterance.onerror=()=>{ if(after) after(); };
+  window.speechSynthesis.speak(utterance);
+}
+function setMessage(text){messageEl.textContent=text;}
+function setStatus(text){statusEl.textContent=text;}
+function setupRecognition(){
+  if(!SpeechRecognition) return false;
+  recognition=new SpeechRecognition();
+  recognition.lang='en-IN';
+  recognition.continuous=false;
+  recognition.interimResults=false;
+  recognition.maxAlternatives=5;
+  recognition.onstart=()=>{listening=true;setStatus('🎤 Listening... Speak now');};
+  recognition.onend=()=>{listening=false;};
+  recognition.onerror=(event)=>{
+    listening=false;
+    if(event.error==='not-allowed'||event.error==='service-not-allowed'){
+      setStatus('Microphone permission blocked');
+      setMessage('Please allow microphone access in Chrome settings, then try again.');
+    }else if(event.error==='no-speech'){
+      setStatus('I did not hear you. Try again.');
+      showRetry();
+    }else{
+      setStatus('Voice recognition unavailable. Use the buttons below.');
+      showFallback();
+    }
+  };
+  recognition.onresult=(event)=>{
+    const alternatives=Array.from(event.results[0]).map(x=>x.transcript.toLowerCase().trim());
+    handleSpoken(alternatives);
+  };
+  return true;
+}
+function listen(){
+  if(!recognition){showFallback();return;}
+  try{recognition.start();}
+  catch(e){setStatus('Tap the Listen button to try again.');showRetry();}
+}
+function knock(){
+  if(step!==0)return;
+  step=1;
+  document.getElementById('knockBtn').disabled=true;
+  playKnock();
+  setMessage("Who's there? 🤨");
+  say("Who is there?",()=>listen());
+  if(!SpeechRecognition){
+    setStatus('Voice recognition is not supported in this browser.');
+    showFallback();
+  }
+}
+function playKnock(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    const ctx=new Ctx();
+    [0,0.28].forEach(offset=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=115;osc.type='sine';
+      gain.gain.setValueAtTime(.6,ctx.currentTime+offset);
+      gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+offset+.16);
+      osc.start(ctx.currentTime+offset);osc.stop(ctx.currentTime+offset+.16);
+    });
+  }catch(e){}
+}
+function handleSpoken(words){
+  const heard=words.join(' / ');
+  setStatus('Heard: '+heard);
+  if(step===1){
+    const ok=words.some(w=>w.includes('mansi')||w.includes('mansee')||w.includes('मानसी')||w.includes('मैं मानसी'));
+    if(ok){
+      step=2;
+      setMessage("I don't believe you! Tell me your favourite food. 😏");
+      say("I don't believe you. Tell me your favourite food.",()=>listen());
+    }else{
+      setMessage('I could not catch “Main Mansi hoon”. Please say it again.');
+      showRetry();
+    }
+  }else if(step===2){
+    const ok=words.some(w=>w.includes('taka')||w.includes('takka')||w.includes('टाका')||w.includes('टक्का')||w.includes('ताका')||w.includes('टकाटक'));
+    if(ok){openDoor();}
+    else{
+      setMessage('I did not hear “TakaTak”. Please say TakaTak again.');
+      showRetry();
+    }
+  }
+}
+function showRetry(){
+  controls.innerHTML='<button onclick="listen()">🎤 Listen again</button><button onclick="showFallback()">Use buttons</button>';
+}
+function showFallback(){
+  if(step===1){
+    controls.innerHTML='<button onclick="mansiButton()">🙋 Main Mansi hoon</button>';
+  }else if(step===2){
+    controls.innerHTML='<button onclick="foodButton()">🍟 TakaTak</button>';
+  }
+}
+function mansiButton(){
+  if(step!==1)return;
+  step=2;setMessage("I don't believe you! Tell me your favourite food. 😏");
+  say("I don't believe you. Tell me your favourite food.",()=>listen());
+}
+function foodButton(){if(step===2)openDoor();}
+function openDoor(){
+  if(opened)return;opened=true;step=3;
+  setMessage('Ohhh! TakaTak! Come in Mansi! ❤️');
+  setStatus('The door is opening...');
+  say('Oh! TakaTak! Come in Mansi!');
+  setTimeout(()=>{
+    document.getElementById('door').classList.add('open');
+    setMessage('Welcome Mansi! ❤️✨');
+    setStatus('Door opened!');
+    controls.innerHTML='<button onclick="location.reload()">🔄 Start Again</button>';
+    helpEl.textContent='♡ Made with love ♡';
+  },1200);
+}
+if(SpeechRecognition){
+  setupRecognition();
+}else{
+  setStatus('This browser does not support voice recognition.');
+  helpEl.textContent='Open this page in Google Chrome. You can also use the on-screen buttons.';
+}
+</script>
+</body>
+</html>
